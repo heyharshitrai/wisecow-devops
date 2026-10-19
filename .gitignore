@@ -1,0 +1,6 @@
+*.log
+docs/wisecow-ca.crt
+docs/evidence/*.tmp
+.kube/
+__pycache__/
+*.pyc
