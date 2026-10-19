@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wisecow
+  labels:
+    app.kubernetes.io/name: wisecow
+    app.kubernetes.io/part-of: wisecow

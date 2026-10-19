@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wisecow
+  namespace: wisecow
+  labels:
+    app.kubernetes.io/name: wisecow
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: wisecow
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wisecow
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wisecow
+        app.kubernetes.io/component: web
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 15
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        # Needed so the emptyDir volumes are writable by the non-root user.
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: wisecow
+          # make load puts this tag in the node, cd.yaml rewrites it to a sha tag
+          # in CI. Nothing pulls it, so IfNotPresent is the right policy.
+          image: ghcr.io/heyharshitrai/wisecow-devops:v0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4499
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 96Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # The server answers one connection at a time and then re-binds. A
+          # probe that lands in the ~10ms gap between the two gets refused, so
+          # these are deliberately unhurried. failureThreshold is 3, not 1.
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 3
+            timeoutSeconds: 5
+            failureThreshold: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            # The script writes a FIFO into its working directory.
+            - name: workdir
+              mountPath: /var/lib/wisecow
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: workdir
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Mi
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Mi
