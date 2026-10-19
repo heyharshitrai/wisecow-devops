@@ -1,0 +1,14 @@
+# Two replicas, one allowed down at a time. Without this, draining a node for
+# maintenance can take the whole service offline.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: wisecow
+  namespace: wisecow
+  labels:
+    app.kubernetes.io/name: wisecow
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wisecow

@@ -1,0 +1,25 @@
+# The only thing that should ever reach this pod is the ingress controller.
+#
+# Caveat worth knowing: kind's default CNI is kindnet, which does not implement
+# NetworkPolicy. This manifest applies cleanly and is ignored until you run a
+# CNI that enforces it (Calico, Cilium). It is here because it is the correct
+# object to ship, not because it is doing anything on this cluster.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wisecow-allow-ingress-only
+  namespace: wisecow
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wisecow
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - protocol: TCP
+          port: 4499
