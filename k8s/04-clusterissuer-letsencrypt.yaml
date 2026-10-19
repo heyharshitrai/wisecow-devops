@@ -1,0 +1,24 @@
+# Committed but unused by the local flow. This is the issuer you would point the
+# Ingress at on a cluster with a real DNS name.
+#
+# Two things have to change before it works:
+#   1. The Ingress host must be a public name whose A record resolves to the
+#      ingress address. HTTP-01 validation cannot happen against wisecow.test.
+#   2. Traefik redirects :80 to :443 in this setup. That would kill the
+#      /.well-known/acme-challenge path. allowACMEByPass is enabled on the web
+#      entrypoint to let cert-manager through, but if you swap controllers,
+#      either keep the redirect off :80 or move to a DNS-01 solver.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: heyharshitrai@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik
