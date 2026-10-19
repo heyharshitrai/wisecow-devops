@@ -1,0 +1,20 @@
+# Mitigation, not a fix.
+#
+# The app accepts one connection per loop iteration. Between iterations there is
+# a gap of a few milliseconds where the port is closed and Traefik's connection
+# is refused, which it reports as a 502. Two replicas halve the odds; a retry at
+# the edge gets rid of most of the rest.
+#
+# The actual fix is to stop using a single `nc` process as the web server. See
+# the limitations section of the README.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: wisecow-retry
+  namespace: wisecow
+  labels:
+    app.kubernetes.io/name: wisecow
+spec:
+  retry:
+    attempts: 3
+    initialInterval: 100ms
