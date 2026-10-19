@@ -1,0 +1,12 @@
+# Step 3: the issuer the Ingress actually points at.
+#
+# It signs with the CA from step 2, so every certificate it hands out chains
+# back to one key. Import that CA once and every local hostname you add later
+# is trusted with no further work.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: wisecow-ca
+spec:
+  ca:
+    secretName: wisecow-ca

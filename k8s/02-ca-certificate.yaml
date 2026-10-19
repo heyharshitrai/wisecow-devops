@@ -1,0 +1,24 @@
+# Step 2: generate the private CA.
+#
+# This Certificate lives in the cert-manager namespace on purpose. A `ca` type
+# ClusterIssuer looks for its key pair in cert-manager's cluster resource
+# namespace, so putting it anywhere else gives a "secret not found" error.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wisecow-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: wisecow.test
+  secretName: wisecow-ca
+  duration: 8760h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: wisecow-selfsigned
+    kind: ClusterIssuer
+    group: cert-manager.io

@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wisecow
+  namespace: wisecow
+  labels:
+    app.kubernetes.io/name: wisecow
+    app.kubernetes.io/component: web
+  annotations:
+    # cert-manager watches for this annotation, then creates the Certificate
+    # and writes the resulting key pair into the secret named under spec.tls.
+    cert-manager.io/cluster-issuer: wisecow-ca
+    # Retries hide the gap between the app's one-connection-at-a-time loops.
+    # See 10-middleware-retry.yaml.
+    traefik.ingress.kubernetes.io/router.middlewares: wisecow-wisecow-retry@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - wisecow.test
+      secretName: wisecow-tls
+  rules:
+    - host: wisecow.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wisecow
+                port:
+                  name: http
