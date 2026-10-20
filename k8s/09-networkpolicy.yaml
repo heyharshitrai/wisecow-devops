@@ -1,9 +1,14 @@
 # The only thing that should ever reach this pod is the ingress controller.
 #
-# Caveat worth knowing: kind's default CNI is kindnet, which does not implement
-# NetworkPolicy. This manifest applies cleanly and is ignored until you run a
-# CNI that enforces it (Calico, Cilium). It is here because it is the correct
-# object to ship, not because it is doing anything on this cluster.
+# Two rules because the controller lives in a different place depending on how
+# you installed it, and a NetworkPolicy that assumes one of them is a 502 in
+# disguise.
+#
+# This file is the reason to deploy somewhere real at least once. On kind, the
+# default CNI is kindnet, which does not implement NetworkPolicy at all, so this
+# was inert and looked fine. On k3s, kube-router enforces it, and Traefik runs
+# in kube-system rather than its own namespace. The result was a working ingress,
+# a Ready certificate, and a 502 from the backend until this was fixed.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -17,9 +22,19 @@ spec:
     - Ingress
   ingress:
     - from:
+        # kind: the ingress controller gets its own namespace, and every pod in
+        # it is allowed.
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: traefik
+        # k3s: bundled Traefik lives in kube-system, so the namespace alone
+        # would be too broad. Namespace plus pod label narrows it back down.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
       ports:
         - protocol: TCP
           port: 4499
