@@ -1,0 +1,71 @@
+name: cd
+
+# This is switched off by default and that is deliberate, not an oversight.
+#
+# The demo cluster in this repository runs on a laptop. GitHub-hosted runners
+# cannot reach it, so a deploy step here would either fail loudly on every push
+# or quietly do nothing. Neither is worth shipping.
+#
+# To turn it on against a cluster the runner can actually reach:
+#   1. gh variable set CD_ENABLED --body true
+#   2. create a ServiceAccount in the wisecow namespace, read its token, and
+#      base64 the kubeconfig into a repository secret called KUBE_CONFIG
+#   3. make sure the image tag built by ci exists in GHCR
+#
+# Locally, `make deploy` runs the same two commands this job runs.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  IMAGE: ghcr.io/heyharshitrai/wisecow-devops
+  NAMESPACE: wisecow
+  DEPLOYMENT: wisecow
+
+jobs:
+  deploy:
+    name: deploy
+    if: >
+      vars.CD_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Write kubeconfig
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.kube"
+          printf '%s' "${{ secrets.KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Set the image and wait for the rollout
+        env:
+          GIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          tag="sha-${GIT_SHA::7}"
+          echo "deploying ${IMAGE}:${tag}"
+          kubectl -n "$NAMESPACE" set image "deployment/$DEPLOYMENT" \
+            "wisecow=${IMAGE}:${tag}"
+          kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" \
+            --timeout=120s
+
+      - name: Show what is running
+        run: |
+          kubectl -n "$NAMESPACE" get pods -o wide
+          kubectl -n "$NAMESPACE" get deployment "$DEPLOYMENT" \
+            -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
