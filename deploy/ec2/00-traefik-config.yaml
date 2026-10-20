@@ -1,0 +1,26 @@
+# k3s ships Traefik as a HelmChart. This overrides a few of its values without
+# replacing the chart.
+#
+# allowACMEByPass is the important one. Traefik redirects :80 to :443, which is
+# correct for users and fatal for Let's Encrypt, because HTTP-01 validation is
+# a plain HTTP fetch of /.well-known/acme-challenge/<token>. Without the bypass
+# the redirect eats the challenge and the certificate never issues.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      web:
+        allowACMEByPass: true
+        http:
+          redirections:
+            entryPoint:
+              to: websecure
+              scheme: https
+              permanent: true
+      websecure:
+        tls:
+          enabled: true

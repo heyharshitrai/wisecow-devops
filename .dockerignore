@@ -3,6 +3,7 @@
 docs
 k8s
 kind
+deploy
 scripts
 kubearmor
 Makefile

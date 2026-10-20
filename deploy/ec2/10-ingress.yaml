@@ -1,0 +1,40 @@
+# The cloud counterpart of k8s/08-ingress.yaml.
+#
+# Two differences: the host is the sslip.io name for this box's Elastic IP, and
+# the issuer is Let's Encrypt instead of the private CA. Everything else is
+# identical, and it deliberately reuses the same object name and namespace so
+# applying it replaces the local Ingress rather than adding a second router
+# competing for the same path.
+#
+# The secret name is different on purpose. The local flow issued wisecow-tls
+# from the private CA, and reusing that name would mean trying to swap an
+# existing certificate's issuer in place. A fresh secret gets a fresh
+# Certificate and avoids the question entirely.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wisecow
+  namespace: wisecow
+  labels:
+    app.kubernetes.io/name: wisecow
+    app.kubernetes.io/component: web
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: wisecow-wisecow-retry@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - 54-153-164-134.sslip.io
+      secretName: wisecow-tls-le
+  rules:
+    - host: 54-153-164-134.sslip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wisecow
+                port:
+                  name: http
