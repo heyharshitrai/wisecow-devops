@@ -1,0 +1,138 @@
+name: ci
+
+# Build, test, scan and publish. Nothing reaches the registry until the image
+# has answered a request under the same read-only constraints it runs with in
+# the cluster.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Shell syntax
+        run: bash -n scripts/system_health_monitor.sh
+      - name: shellcheck
+        run: shellcheck --severity=warning scripts/system_health_monitor.sh
+      - name: Python syntax
+        run: python3 -m py_compile scripts/app_health_checker.py
+
+  build:
+    name: build, smoke test, scan, push
+    runs-on: ubuntu-latest
+    needs: lint
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Work out image name and tag
+        id: meta
+        run: |
+          set -euo pipefail
+          image="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          tag="sha-$(git rev-parse --short=7 HEAD)"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Same flags as the Deployment: read-only root, writable workdir, non-root.
+      # If the image only works with a writable root filesystem, this catches it
+      # before the image is published.
+      #
+      # The uid/gid on the tmpfs is the bit people miss. Kubernetes hands the
+      # emptyDir to fsGroup, but plain `docker run` mounts tmpfs as root:root
+      # 0755, so the process cannot create the FIFO and the container starts
+      # looping on "Permission denied".
+      - name: Start the image the way Kubernetes will
+        run: |
+          set -euo pipefail
+          docker run -d --name smoke \
+            --read-only \
+            --user 10001:10001 \
+            --tmpfs /var/lib/wisecow:rw,size=8m,uid=10001,gid=10001,mode=0770 \
+            --tmpfs /tmp:rw,size=8m \
+            -p 4499:4499 \
+            "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
+
+      # The app accepts one connection per loop iteration and will occasionally
+      # drop a connection that lands in the gap between them. That is documented
+      # in the README. This step asks whether the image works at all, not whether
+      # it is reliable, so it retries instead of failing the build on one unlucky
+      # request. Everything after this -- the scan and the push -- is a real gate.
+      - name: Assert it serves a cow
+        run: |
+          set -uo pipefail
+          for attempt in $(seq 1 15); do
+            code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 5 \
+                   http://127.0.0.1:4499/ 2>/dev/null || true)
+            if [ "$code" = "200" ] && grep -q '<pre>' /tmp/body 2>/dev/null; then
+              echo "attempt $attempt: 200, cow present"
+              cat /tmp/body
+              exit 0
+            fi
+            echo "attempt $attempt: status=${code:-none}, retrying"
+            sleep 1
+          done
+          echo "no successful response in 15 attempts" >&2
+          exit 1
+
+      - name: Container logs
+        if: failure()
+        run: docker logs smoke || true
+
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          vuln-type: os
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          docker tag "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}" \
+                     "${{ steps.meta.outputs.image }}:latest"
+          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
+          docker push "${{ steps.meta.outputs.image }}:latest"
