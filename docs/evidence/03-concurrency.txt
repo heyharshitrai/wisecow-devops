@@ -1,0 +1,25 @@
+captured: 2026-10-20T10:35:51Z
+target: https://wisecow.test/ -- 2 replicas, Traefik retry middleware, 3 attempts
+
+test 1: 60 requests, 200ms apart (3 rounds of 20)
+  round 1: ok=20 failed=0
+  round 2: ok=19 failed=1
+  round 3: ok=20 failed=0
+
+test 2: 60 requests, back to back (3 rounds of 20)
+  round 1: ok=20 failed=0
+  round 2: ok=18 failed=2
+  round 3: ok=20 failed=0
+
+test 3: 10 concurrent, three rounds
+  round 1:       4 200       6 502 
+  round 2:       4 200       6 502 
+  round 3:       4 200       6 502 
+
+test 4: 30 requests straight to one pod, bypassing the ingress
+  ok=30 failed=0
+
+The app serves one connection per loop iteration, so a request landing in the
+gap between iterations is refused. Sequential traffic stays reliable because the
+retry middleware covers that gap. Real concurrency does not, and no amount of
+retrying fixes a server that can only hold one connection.

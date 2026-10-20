@@ -1,0 +1,50 @@
+captured: 2026-10-20T10:35:50Z
+built from scratch with: make down; make cluster controllers image load deploy ca
+
+$ kubectl get nodes
+NAME                    STATUS   ROLES           AGE     VERSION
+wisecow-control-plane   Ready    control-plane   2m18s   v1.34.11
+
+$ kubectl -n wisecow get pods,svc,ingress,middleware
+NAME                           READY   STATUS    RESTARTS   AGE
+pod/wisecow-74989f984b-5rkvm   1/1     Running   0          57s
+pod/wisecow-74989f984b-c24gl   1/1     Running   0          57s
+
+NAME              TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+service/wisecow   ClusterIP   10.96.132.138   <none>        80/TCP    57s
+
+NAME                                CLASS     HOSTS          ADDRESS   PORTS     AGE
+ingress.networking.k8s.io/wisecow   traefik   wisecow.test             80, 443   57s
+
+NAME                                  AGE
+middleware.traefik.io/wisecow-retry   57s
+
+$ kubectl get clusterissuers
+NAME                 READY   AGE
+letsencrypt-prod     True    57s
+wisecow-ca           True    57s
+wisecow-selfsigned   True    57s
+
+$ kubectl -n cert-manager get certificate
+NAME         READY   SECRET       AGE
+wisecow-ca   True    wisecow-ca   57s
+
+$ kubectl -n wisecow get certificate
+NAME          READY   SECRET        AGE
+wisecow-tls   True    wisecow-tls   57s
+
+container image actually running:
+  wisecow: ghcr.io/heyharshitrai/wisecow-devops:v0.1.0
+
+applied in this order (kubectl apply -f k8s/ is lexicographic):
+  00-namespace.yaml
+  01-clusterissuer-selfsigned.yaml
+  02-ca-certificate.yaml
+  03-clusterissuer-ca.yaml
+  04-clusterissuer-letsencrypt.yaml
+  05-middleware-retry.yaml
+  06-deployment.yaml
+  07-service.yaml
+  08-ingress.yaml
+  09-networkpolicy.yaml
+  10-pdb.yaml

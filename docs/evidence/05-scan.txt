@@ -1,0 +1,22 @@
+captured: 2026-10-20T10:28:47Z
+image:   ghcr.io/heyharshitrai/wisecow-devops:v0.1.0
+trivy:   Version: 0.76.0
+
+$ trivy image --scanners vuln --severity CRITICAL,HIGH --ignore-unfixed
+
+┌────────────────────────────────────────────────────────────┬────────┬─────────────────┐
+│                           Target                           │  Type  │ Vulnerabilities │
+├────────────────────────────────────────────────────────────┼────────┼─────────────────┤
+│ ghcr.io/heyharshitrai/wisecow-devops:v0.1.0 (debian 12.15) │ debian │        0        │
+└────────────────────────────────────────────────────────────┴────────┴─────────────────┘
+Legend:
+
+$ trivy image --scanners vuln --severity CRITICAL,HIGH    (unfixed entries included)
+    total 60: HIGH=59, CRITICAL=1
+    status: affected=51, fix_deferred=8, will_not_fix=1
+    fixed versions available: 0
+
+That last line is the whole argument for the gate. 60 findings, none of them
+fixable today, so failing the build on severity alone would leave CI red
+permanently and teach everyone to ignore it. --ignore-unfixed means the build
+breaks the moment Debian actually publishes a fix.

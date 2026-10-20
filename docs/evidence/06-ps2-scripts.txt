@@ -1,0 +1,66 @@
+captured: 2026-10-20T10:28:51Z
+
+problem statement 2, objective 1: system health monitor
+$ LOG_FILE=/tmp/health.log bash scripts/system_health_monitor.sh
+DESKTOP-675N6AO  2026-10-20T10:28:52Z
+  cpu               2.9   limit 80       ok
+  memory           20.7   limit 85       ok
+  disk:/              1   limit 85       ok
+  processes          95   limit 500      ok
+  result: ok
+  exit=0
+
+$ CPU_THRESHOLD=0 LOG_FILE=/tmp/health.log bash scripts/system_health_monitor.sh
+DESKTOP-675N6AO  2026-10-20T10:28:53Z
+  cpu               2.7   limit 0        BREACH
+  memory           20.6   limit 85       ok
+  disk:/              1   limit 85       ok
+  processes          95   limit 500      ok
+  result: breach
+  exit=1
+
+$ cat /tmp/health.log
+  2026-10-20T10:28:52Z DESKTOP-675N6AO ok
+  2026-10-20T10:28:53Z DESKTOP-675N6AO breach
+
+$ REQUIRED_PROCS="sshd does-not-exist" bash scripts/system_health_monitor.sh
+DESKTOP-675N6AO  2026-10-20T10:28:54Z
+  cpu               2.9   limit 80       ok
+  memory           20.6   limit 85       ok
+  disk:/              1   limit 85       ok
+  processes          95   limit 500      ok
+  proc:sshd           0   limit running  MISSING
+  proc:does-not-exist        0   limit running  MISSING
+  result: breach
+  exit=1
+
+problem statement 2, objective 4: application health checker
+$ python3 scripts/app_health_checker.py --url https://wisecow.test --cacert docs/wisecow-ca.crt
+target  https://wisecow.test
+attempts 1
+latency 16.9 ms
+status  200
+body    / Persons attempting to find a motive in  \
+result  UP
+  exit=0
+
+$ same URL, no CA supplied (verification should fail)
+target  https://wisecow.test
+attempts 1
+latency 3.8 ms
+error   TLS verification failed: unable to get local issuer certificate
+result  DOWN
+  exit=1
+
+$ --insecure, for comparison
+body    / He was part of my dream, of course -- \
+result  UP
+  exit=0
+
+$ a port where nothing is listening
+target  http://127.0.0.1:4599
+attempts 2
+latency 0.3 ms
+error   connection refused
+result  DOWN
+  exit=1

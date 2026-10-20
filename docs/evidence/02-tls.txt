@@ -1,0 +1,44 @@
+captured: 2026-10-20T10:38:22Z
+
+$ curl -sI http://wisecow.test/          (HEAD)
+HTTP/1.1 308 Permanent Redirect
+Location: https://wisecow.test/
+Date: Tue, 20 Oct 2026 10:38:22 GMT
+
+$ curl -s -D- -o /dev/null http://wisecow.test/   (GET)
+HTTP/1.1 301 Moved Permanently
+Location: https://wisecow.test/
+Date: Tue, 20 Oct 2026 10:38:22 GMT
+
+Both are permanent redirects to HTTPS. Traefik answers HEAD with 308 and GET with
+301; either is correct and neither is worth losing sleep over.
+
+$ curl -sv --cacert docs/wisecow-ca.crt https://wisecow.test/
+  SSL connection using TLSv1.3 / TLS_AES_128_GCM_SHA256 / X25519MLKEM768 / RSASSA-PSS
+< HTTP/2 200 
+
+body:
+  
+  <pre> ________________________________________
+  / Q: Why did the lone ranger kill Tonto? \
+  | A: He found out what "kimosabe" really |
+  \ means.                                 /
+   ----------------------------------------
+
+$ openssl s_client -connect 127.0.0.1:443 -servername wisecow.test -CAfile docs/wisecow-ca.crt
+  Verify return code: 0 (ok)
+      Protocol  : TLSv1.3
+      Cipher    : TLS_AES_128_GCM_SHA256
+      Verify return code: 0 (ok)
+
+leaf as served:
+  issuer=CN=wisecow.test
+  notBefore=Oct 20 10:34:53 2026 GMT
+  notAfter=Jan 18 10:34:53 2027 GMT
+  X509v3 Subject Alternative Name: critical
+      DNS:wisecow.test
+
+CA exported by `make ca`:
+  subject=CN=wisecow.test
+  notBefore=Oct 20 10:34:53 2026 GMT
+  notAfter=Oct 20 10:34:53 2027 GMT

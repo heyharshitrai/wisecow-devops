@@ -1,0 +1,31 @@
+captured: 2026-10-20T10:28:00Z
+Each block below is real output from this image, not a description of one.
+
+trap 1: read-only root filesystem with no writable working directory
+$ docker run --read-only --user 10001:10001 <image>
+  logs:
+    mkfifo: cannot create fifo 'response': Read-only file system
+    Wisdom served on port=4499...
+    cat: response: No such file or directory
+  state:
+    status=running exit=0
+    It does not crash. It keeps running and failing, which is why a readiness
+    probe matters more than a restart policy for this workload.
+
+trap 2: /usr/games missing from PATH
+$ PATH=/usr/bin:/bin /usr/local/bin/wisecow.sh
+    Install prerequisites.
+
+trap 3: fortune-mod installed without a fortune data package
+$ fortune   (data files removed as root)
+    fortune: /usr/share/games/fortunes: No fortune files in directory.
+    fortune:/usr/share/games/fortunes not a fortune file or directory
+    No fortunes found
+
+trap 4: netcat-traditional instead of netcat-openbsd
+$ nc -lN 4499
+    nc: invalid option -- 'N'
+
+the working configuration, for contrast:
+$ docker run --read-only --user 10001:10001 --tmpfs /var/lib/wisecow:uid=10001,gid=10001,mode=0770 ...
+    status=200
