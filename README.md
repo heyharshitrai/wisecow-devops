@@ -12,12 +12,19 @@ four specific ways.
 `sha256 7531eee4983f90db84fcdb3cba0258b8f4f72adf387a664d6cea0c06e4760ac9`. Nothing about the
 application changed. Everything here is packaging.
 
-## About the demo
+## Live demo
 
-All of this runs on a local `kind` cluster on one machine. `wisecow.test` is a hostname that
-exists only in that machine's `/etc/hosts` file. It does not resolve anywhere else, and there
-is no public deployment of this. The steps below get you a running cluster and a working
-certificate in about four minutes.
+**https://54-153-164-134.sslip.io**
+
+That is a single-node k3s cluster on a t3.small, with a real Let's Encrypt certificate. The
+hostname resolves through [sslip.io](https://sslip.io), which maps any
+`<ip-with-dashes>.sslip.io` name back to that IP, so there is no domain to buy and nothing to
+import. You should get a padlock and a cow.
+
+It stays up until the instance is torn down. If it is down when you read this, the steps
+below build the same stack on `kind` in about four minutes, using a private CA instead of
+Let's Encrypt. Note that `wisecow.test` is a hostname that exists only in your own
+`/etc/hosts` file — it does not resolve anywhere else, and it is not the live demo.
 
 ## Try it
 
@@ -53,6 +60,13 @@ in your hosts file, so it will not load before that step.
 
 `make down` deletes the cluster when you are finished with it.
 
+### On a real cluster
+
+`deploy/ec2/` holds the small set of differences needed to run the same manifests on a
+public box with a real certificate instead of a private CA: a Traefik override so the ACME
+challenge survives the HTTP-to-HTTPS redirect, an ingress for the public hostname, and one
+script that does the whole install. Walkthrough and teardown are in `deploy/ec2/README.md`.
+
 ## What is in here
 
 | Path | What it is |
@@ -61,6 +75,7 @@ in your hosts file, so it will not load before that step.
 | `LICENSE` | Apache-2.0, same as upstream |
 | `app/wisecow.sh` | the upstream script, unmodified |
 | `k8s/` | numbered manifests, `00-namespace` through `10-pdb`, applied in that order |
+| `deploy/ec2/` | the same manifests on a public box: Traefik values, a Let's Encrypt ingress, one install script |
 | `kind/config.yaml` | cluster definition with host ports 80/443 forwarded in |
 | `.github/workflows/ci.yaml` | build, smoke test, scan, publish |
 | `.github/workflows/cd.yaml` | deploy, switched off by default (see below) |
@@ -141,12 +156,12 @@ be read closely seemed like the wrong first impression, so this uses Traefik. Th
 that every cert-manager tutorial on the internet assumes nginx, so the annotations differ
 and you have to know which ones matter.
 
-There is a Let's Encrypt issuer committed at `04-clusterissuer-letsencrypt.yaml` and it is
-deliberately unused. It is what you would point the Ingress at on a cluster with a real DNS
-name. It cannot work here, because `wisecow.test` does not resolve publicly and HTTP-01
-validation has nowhere to go. Traefik's `allowACMEByPass` is switched on anyway, since the
-`:80` redirect would otherwise break the `/.well-known/acme-challenge` path the moment
-somebody enables that issuer.
+There is a Let's Encrypt issuer at `04-clusterissuer-letsencrypt.yaml`. It goes unused
+locally, because `wisecow.test` does not resolve publicly and HTTP-01 validation has nowhere
+to go. The cloud deployment in `deploy/ec2/` points the Ingress at it instead, which is how
+the live demo got a publicly trusted certificate. Traefik's `allowACMEByPass` is what lets
+the challenge through the `:80` redirect — leave it off and you get a certificate that
+silently never issues.
 
 **GHCR with `GITHUB_TOKEN`, not Docker Hub credentials.** `permissions: packages: write`
 plus the runner's own token means there is no long-lived registry secret sitting in the repo
@@ -210,9 +225,13 @@ step would either fail on every push or quietly do nothing. Neither is worth shi
 `cd.yaml` is real and correct, gated behind `vars.CD_ENABLED`. The local equivalent,
 `kubectl set image` followed by `kubectl rollout status`, was run and is in the evidence.
 
-The NetworkPolicy does nothing on this cluster. kind's default CNI is kindnet, which does not
-implement NetworkPolicy. The object is correct and it is inert. It needs Calico or Cilium
-before it means anything.
+The NetworkPolicy is inert here and was actively wrong in the cloud. kindnet does not
+implement NetworkPolicy, so the object applied cleanly and did nothing. On k3s, kube-router
+enforces it, and the bundled Traefik runs in `kube-system` rather than getting its own
+namespace. The first cloud deploy came back 502 with a Ready certificate and a healthy
+ingress, because the policy only admitted traffic from a namespace that does not exist there.
+It is fixed now and covered in `deploy/ec2/README.md`. That bug is the best argument I have
+for deploying somewhere real at least once: it was invisible on the laptop.
 
 The KubeArmor policies are untested. KubeArmor is not installed here, so those two files are
 configuration rather than a verified claim.
