@@ -1,0 +1,42 @@
+# Two policy objects rather than one, because each has a single action and the
+# semantics stay obvious.
+#
+# These are extras. KubeArmor is a CNCF runtime-security project and this is the
+# shortest honest way to show the policy model, rather than just talking about it.
+#
+# Not verified on this cluster: kindnet is the CNI, KubeArmor is not installed,
+# and these are declarative objects with no enforcement behind them here. See
+# docs/evidence for what was actually run.
+---
+apiVersion: security.kubearmor.com/v1
+kind: KubeArmorPolicy
+metadata:
+  name: wisecow-block-package-managers
+  namespace: wisecow
+spec:
+  severity: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wisecow
+  process:
+    matchPaths:
+      - path: /usr/bin/apt
+      - path: /usr/bin/apt-get
+      - path: /usr/bin/dpkg
+  action: Block
+---
+apiVersion: security.kubearmor.com/v1
+kind: KubeArmorPolicy
+metadata:
+  name: wisecow-block-etc-writes
+  namespace: wisecow
+spec:
+  severity: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wisecow
+  file:
+    matchDirectories:
+      - dir: /etc/
+        recursive: true
+  action: Block
