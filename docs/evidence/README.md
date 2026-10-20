@@ -11,6 +11,7 @@ Every file here is the output of a command that ran against this repository, cap
 | `04-docker-traps.txt` | Four real failures — wrong netcat, missing PATH entry, no fortune data, read-only FIFO — plus the configuration that works |
 | `05-scan.txt` | Trivy: 0 with `--ignore-unfixed`, 60 without, none of them fixable |
 | `06-ps2-scripts.txt` | Both Problem Statement 2 scripts, including the breach, missing-process and TLS-failure paths |
+| `07-cloud.txt` | The live k3s deployment: Let's Encrypt chain, public TLS verification, and the cluster it runs on |
 
 ## What is not here
 

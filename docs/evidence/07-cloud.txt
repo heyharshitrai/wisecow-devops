@@ -1,0 +1,52 @@
+captured: 2026-10-20T12:21:38Z
+live at:  https://54-153-164-134.sslip.io/
+cluster:  k3s v1.36.5+k3s1, single node, t3.small / ap-southeast-2
+
+== http redirects ==
+$ curl -sI http://54-153-164-134.sslip.io/
+  HTTP/1.1 308 Permanent Redirect
+  Location: https://54-153-164-134.sslip.io/
+  Date: Tue, 20 Oct 2026 12:21:44 GMT
+  Content-Length: 18
+
+== the certificate is Let's Encrypt, not the local CA ==
+$ openssl s_client -connect 54-153-164-134.sslip.io:443 | openssl x509 -noout -subject -issuer -dates
+  subject=CN=54-153-164-134.sslip.io
+  issuer=C=US, O=Let's Encrypt, CN=YR1
+  notBefore=Oct 20 11:21:33 2026 GMT
+  notAfter=Jan 18 11:21:32 2027 GMT
+
+  chain:
+   0 s:CN=54-153-164-134.sslip.io
+     i:C=US, O=Let's Encrypt, CN=YR1
+   1 s:C=US, O=Let's Encrypt, CN=YR1
+     i:C=US, O=ISRG, CN=Root YR
+   2 s:C=US, O=ISRG, CN=Root YR
+     i:C=US, O=Internet Security Research Group, CN=ISRG Root X1
+
+== verifies against the system trust store, with no --cacert ==
+$ curl https://54-153-164-134.sslip.io/
+  status=200 tls_verify=0
+
+== it serves the cow ==
+  
+  <pre> _____________________________________
+  / Your true value depends entirely on \
+  \ what you are compared with.         /
+   -------------------------------------
+          \   ^__^
+
+== cluster state ==
+  NAME               STATUS   ROLES           AGE     VERSION
+  ip-172-31-34-224   Ready    control-plane   4m32s   v1.36.5+k3s1
+  
+  NAME                           READY   STATUS    RESTARTS   AGE
+  pod/wisecow-5b4c6f6959-ks7ps   1/1     Running   0          2m13s
+  pod/wisecow-5b4c6f6959-vthm7   1/1     Running   0          2m23s
+  
+  NAME                                CLASS     HOSTS                     ADDRESS         PORTS     AGE
+  ingress.networking.k8s.io/wisecow   traefik   54-153-164-134.sslip.io   172.31.34.224   80, 443   2m25s
+  
+  NAME                                         READY   SECRET           AGE
+  certificate.cert-manager.io/wisecow-tls-le   True    wisecow-tls-le   2m24s
+  
